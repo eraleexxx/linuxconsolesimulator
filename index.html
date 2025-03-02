@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux Console Simulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Courier New', monospace;
+        }
+        
+        body {
+            background: radial-gradient(circle at center, #333, #000);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .console {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            color: white;
+        }
+        
+        .input-line {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fade-in 0.3s ease forwards;
+        }
+        
+        @keyframes fade-in {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .prompt {
+            color: #0f0;
+            margin-right: 10px;
+        }
+        
+        .input {
+            flex: 1;
+            color: white;
+        }
+        
+        .output {
+            padding-left: 10px;
+            margin-bottom: 15px;
+            color: #ddd;
+            line-height: 1.4;
+            opacity: 0;
+            animation: fade-in 0.3s ease forwards;
+        }
+        
+        .output.error {
+            color: #ff6b6b;
+        }
+        
+        .output.success {
+            color: #a2ff86;
+        }
+        
+        .input-area {
+            display: flex;
+            padding: 10px 20px;
+            border-top: 1px solid #333;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        
+        .input-area .prompt {
+            color: #0f0;
+            margin-right: 10px;
+        }
+        
+        .input-area input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 16px;
+            outline: none;
+        }
+        
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 16px;
+            background-color: white;
+            animation: blink 1s step-end infinite;
+            margin-left: 2px;
+            vertical-align: middle;
+        }
+        
+        @keyframes blink {
+            50% {
+                opacity: 0;
+            }
+        }
+        
+        .ascii-art {
+            color: #0f0;
+            font-family: monospace;
+            white-space: pre;
+            margin-bottom: 15px;
+            text-align: left;
+            line-height: 1.2;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                font-size: 14px;
+            }
+            
+            .input-area input {
+                font-size: 14px;
+            }
+        }
+        
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #111;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        .command {
+            color: #58a6ff;
+            font-weight: bold;
+        }
+        
+        .highlight {
+            color: #f0c674;
+        }
+    </style>
+</head>
+<body>
+    <div class="console" id="console">
+        <div class="ascii-art">
+██████╗  █████╗ ███████╗██╗  ██╗     ██████╗ ██████╗ ███╗   ██╗███████╗ ██████╗ ██╗     ███████╗
+██╔══██╗██╔══██╗██╔════╝██║  ██║    ██╔════╝██╔═══██╗████╗  ██║██╔════╝██╔═══██╗██║     ██╔════╝
+██████╔╝███████║███████╗███████║    ██║     ██║   ██║██╔██╗ ██║███████╗██║   ██║██║     █████╗  
+██╔══██╗██╔══██║╚════██║██╔══██║    ██║     ██║   ██║██║╚██╗██║╚════██║██║   ██║██║     ██╔══╝  
+██████╔╝██║  ██║███████║██║  ██║    ╚██████╗╚██████╔╝██║ ╚████║███████║╚██████╔╝███████╗███████╗
+╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝     ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝ ╚═════╝ ╚══════╝╚══════╝
+        </div>
+        <div class="output">Welcome to BashConsole Simulator v1.0.0</div>
+        <div class="output">Type <span class="command">help</span> to see a list of available commands.</div>
+    </div>
+    <div class="input-area">
+        <div class="prompt">@admin:~$</div>
+        <input type="text" id="commandInput" autocomplete="off" autofocus>
+    </div>
+
+    <script>
+        const console = document.getElementById('console');
+        const commandInput = document.getElementById('commandInput');
+        
+        // Focus the input field when the page loads
+        window.addEventListener('load', () => {
+            commandInput.focus();
+        });
+
+        // Keep focus on input field when clicking anywhere on the page
+        document.addEventListener('click', () => {
+            commandInput.focus();
+        });
+        
+        // Command history functionality
+        let commandHistory = [];
+        let historyIndex = -1;
+        
+        // Available commands
+        const commands = {
+            'help': {
+                description: 'Show a list of available commands',
+                execute: () => {
+                    let output = 'Available commands:\n\n';
+                    Object.keys(commands).forEach(cmd => {
+                        output += `<span class="command">${cmd}</span>: ${commands[cmd].description}\n`;
+                    });
+                    return output;
+                }
+            },
+            'clear': {
+                description: 'Clear the console',
+                execute: () => {
+                    setTimeout(() => {
+                        // Keep only the ASCII art
+                        const children = Array.from(console.children);
+                        console.innerHTML = '';
+                        
+                        // Re-add ASCII art
+                        const asciiArt = document.createElement('div');
+                        asciiArt.className = 'ascii-art';
+                        asciiArt.innerHTML = `
+██████╗  █████╗ ███████╗██╗  ██╗     ██████╗ ██████╗ ███╗   ██╗███████╗ ██████╗ ██╗     ███████╗
+██╔══██╗██╔══██╗██╔════╝██║  ██║    ██╔════╝██╔═══██╗████╗  ██║██╔════╝██╔═══██╗██║     ██╔════╝
+██████╔╝███████║███████╗███████║    ██║     ██║   ██║██╔██╗ ██║███████╗██║   ██║██║     █████╗  
+██╔══██╗██╔══██║╚════██║██╔══██║    ██║     ██║   ██║██║╚██╗██║╚════██║██║   ██║██║     ██╔══╝  
+██████╔╝██║  ██║███████║██║  ██║    ╚██████╗╚██████╔╝██║ ╚████║███████║╚██████╔╝███████╗███████╗
+╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝     ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝ ╚═════╝ ╚══════╝╚══════╝
+                        `;
+                        console.appendChild(asciiArt);
+                    }, 100);
+                    return '';
+                }
+            },
+            'echo': {
+                description: 'Echo a message',
+                execute: (args) => {
+                    return args.join(' ');
+                }
+            },
+            'date': {
+                description: 'Display the current date and time',
+                execute: () => {
+                    return new Date().toString();
+                }
+            },
+            'whoami': {
+                description: 'Display current user',
+                execute: () => {
+                    return '@admin';
+                }
+            },
+            'ls': {
+                description: 'List directory contents',
+                execute: () => {
+                    return 'Documents  Downloads  Pictures  Music  Videos  secret.txt';
+                }
+            },
+            'cat': {
+                description: 'Concatenate and display file content',
+                execute: (args) => {
+                    if (args.length === 0) {
+                        return '<span class="error">Error: No file specified</span>';
+                    }
+                    
+                    if (args[0] === 'secret.txt') {
+                        return 'Recuerda';
+                    } else {
+                        return `<span class="error">Error: ${args[0]}: No such file or directory</span>`;
+                    }
+                }
+            },
+            'info': {
+                description: 'Display information about this console',
+                execute: () => {
+                    return `
+BashConsole Simulator v1.0.0
+Created by: <span class="highlight">@ErAleexx</span>
+https://github.com/ErAleexx
+
+A lightweight Linux terminal simulator with basic command functionality.
+Built with HTML, CSS, and JavaScript.
+                    `;
+                }
+            },
+            'code': {
+                description: 'Display the secret code',
+                execute: () => {
+                    return '<span class="highlight">Recuerda</span>';
+                }
+            },
+            'pwd': {
+                description: 'Print working directory',
+                execute: () => {
+                    return '/home/admin';
+                }
+            },
+            'uname': {
+                description: 'Print system information',
+                execute: (args) => {
+                    if (args.includes('-a')) {
+                        return 'BashOS 5.4.0 #1 SMP Web March 1 2025 x86_64 GNU/Linux';
+                    }
+                    return 'BashOS';
+                }
+            },
+            'exit': {
+                description: 'Exit the terminal (refresh to restart)',
+                execute: () => {
+                    setTimeout(() => {
+                        const shutdownText = document.createElement('div');
+                        shutdownText.className = 'output';
+                        shutdownText.innerHTML = 'Shutting down...';
+                        console.appendChild(shutdownText);
+                        
+                        setTimeout(() => {
+                            document.body.style.opacity = '0';
+                            document.body.style.transition = 'opacity 1s ease';
+                            
+                            setTimeout(() => {
+                                const shutdownScreen = document.createElement('div');
+                                shutdownScreen.style.position = 'fixed';
+                                shutdownScreen.style.top = '0';
+                                shutdownScreen.style.left = '0';
+                                shutdownScreen.style.width = '100%';
+                                shutdownScreen.style.height = '100%';
+                                shutdownScreen.style.backgroundColor = 'black';
+                                shutdownScreen.style.color = 'white';
+                                shutdownScreen.style.display = 'flex';
+                                shutdownScreen.style.justifyContent = 'center';
+                                shutdownScreen.style.alignItems = 'center';
+                                shutdownScreen.style.fontSize = '24px';
+                                shutdownScreen.innerHTML = 'System halted. Refresh to restart.';
+                                
+                                document.body.innerHTML = '';
+                                document.body.appendChild(shutdownScreen);
+                                document.body.style.opacity = '1';
+                            }, 1000);
+                        }, 1000);
+                    }, 500);
+                    
+                    return 'Logging out @admin...';
+                }
+            }
+        };
+        
+        // Handle command execution
+        commandInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                
+                const commandText = commandInput.value.trim();
+                commandInput.value = '';
+                
+                if (commandText !== '') {
+                    // Add to history
+                    commandHistory.push(commandText);
+                    historyIndex = commandHistory.length;
+                    
+                    // Create input line
+                    const inputLine = document.createElement('div');
+                    inputLine.className = 'input-line';
+                    
+                    const prompt = document.createElement('div');
+                    prompt.className = 'prompt';
+                    prompt.textContent = '@admin:~$';
+                    
+                    const input = document.createElement('div');
+                    input.className = 'input';
+                    input.textContent = commandText;
+                    
+                    inputLine.appendChild(prompt);
+                    inputLine.appendChild(input);
+                    console.appendChild(inputLine);
+                    
+                    // Process command
+                    const parts = commandText.split(' ');
+                    const cmd = parts[0].toLowerCase();
+                    const args = parts.slice(1);
+                    
+                    // Create output
+                    const output = document.createElement('div');
+                    output.className = 'output';
+                    
+                    if (cmd in commands) {
+                        const result = commands[cmd].execute(args);
+                        output.innerHTML = result;
+                    } else if (cmd === '') {
+                        // Do nothing for empty command
+                        output.style.display = 'none';
+                    } else {
+                        output.innerHTML = `<span class="error">Command not found: ${cmd}</span>`;
+                    }
+                    
+                    if (cmd !== 'clear') {
+                        console.appendChild(output);
+                    }
+                    
+                    // Scroll to bottom
+                    console.scrollTop = console.scrollHeight;
+                }
+            } else if (e.key === 'ArrowUp') {
+                // Navigate up in history
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    commandInput.value = commandHistory[historyIndex];
+                    
+                    // Move cursor to end
+                    setTimeout(() => {
+                        commandInput.selectionStart = commandInput.value.length;
+                        commandInput.selectionEnd = commandInput.value.length;
+                    }, 0);
+                }
+                e.preventDefault();
+            } else if (e.key === 'ArrowDown') {
+                // Navigate down in history
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    commandInput.value = commandHistory[historyIndex];
+                } else if (historyIndex === commandHistory.length - 1) {
+                    historyIndex = commandHistory.length;
+                    commandInput.value = '';
+                }
+                e.preventDefault();
+            } else if (e.key === 'Tab') {
+                // Simple tab completion
+                e.preventDefault();
+                
+                const inputText = commandInput.value.trim();
+                if (inputText === '') return;
+                
+                const parts = inputText.split(' ');
+                const lastPart = parts[parts.length - 1];
+                
+                // Only auto-complete commands if it's the first word
+                if (parts.length === 1) {
+                    const matches = Object.keys(commands).filter(cmd => 
+                        cmd.startsWith(lastPart.toLowerCase())
+                    );
+                    
+                    if (matches.length === 1) {
+                        commandInput.value = matches[0];
+                    } else if (matches.length > 1) {
+                        // Show possible completions
+                        const possibleCompletions = document.createElement('div');
+                        possibleCompletions.className = 'output';
+                        possibleCompletions.innerHTML = matches.join('  ');
+                        
+                        // Add input line
+                        const inputLine = document.createElement('div');
+                        inputLine.className = 'input-line';
+                        
+                        const prompt = document.createElement('div');
+                        prompt.className = 'prompt';
+                        prompt.textContent = '@admin:~$';
+                        
+                        const input = document.createElement('div');
+                        input.className = 'input';
+                        input.textContent = inputText;
+                        
+                        inputLine.appendChild(prompt);
+                        inputLine.appendChild(input);
+                        console.appendChild(inputLine);
+                        
+                        console.appendChild(possibleCompletions);
+                        console.scrollTop = console.scrollHeight;
+                    }
+                }
+            }
+        });
+        
+        // Auto-focus input field when clicking on console
+        console.addEventListener('click', () => {
+            commandInput.focus();
+        });
+        
+        // Welcome message animation
+        setTimeout(() => {
+            const message = document.createElement('div');
+            message.className = 'output';
+            message.innerHTML = 'Type <span class="command">help</span> to get started!';
+            console.appendChild(message);
+        }, 1000);
+    </script>
+</body>
+</html>
